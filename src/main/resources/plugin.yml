@@ -20,6 +20,7 @@ class-depends:
   - EpicBosses
   - EpicSpawners
   - Factions
+  - FactionsX
   - Holograms
   - HolographicDisplays
   - MassiveCore

@@ -178,6 +178,10 @@ public final class ProvidersHandler {
                 claimsProvider.ifPresent(claimsProviders::add);
             }
         }
+        if (Bukkit.getPluginManager().isPluginEnabled("FactionsX")) {
+            Optional<ClaimsProvider> claimsProvider = createInstance("ClaimsProvider_FactionsX");
+            claimsProvider.ifPresent(claimsProviders::add);
+        }
         if (Bukkit.getPluginManager().isPluginEnabled("PlotSquared")) {
             Plugin plugin = Bukkit.getPluginManager().getPlugin("PlotSquared");
             int plotSquaredVersion = Integer.parseInt(plugin.getDescription().getVersion().split("\\.")[0]);
