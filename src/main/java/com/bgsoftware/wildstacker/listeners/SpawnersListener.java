@@ -360,8 +360,7 @@ public final class SpawnersListener implements Listener {
     //Priority is high so it can be fired before SilkSpawners
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     public void onEntityExplode(EntityExplodeEvent e) {
-        if (!plugin.getSettings().spawnersStackingEnabled ||
-                EntityUtils.shouldIgnoreExplodeEvent(e.getEntityType()))
+        if (!plugin.getSettings().spawnersStackingEnabled || plugin.getNMSAdapter().isSoftExplosion(e))
             return;
 
         UUID explodeSource = explodableSources.get(e.getEntity());
@@ -580,7 +579,7 @@ public final class SpawnersListener implements Listener {
         if (!plugin.getSettings().changeUsingEggs) {
             e.setCancelled(true);
 
-            if (EntitiesListener.IMP.handleSpawnerEggUse(e.getItem(), e.getClickedBlock(), e.getBlockFace(), e)) {
+            if (EntitiesListener.IMP.handleSpawnEggInteraction(e.getItem(), e.getClickedBlock(), e.getBlockFace(), e)) {
                 try {
                     EntityType entityType = EntityType.valueOf(ItemUtils.getEntityType(e.getItem()).name());
                     plugin.getNMSEntities().createEntity(e.getClickedBlock().getRelative(e.getBlockFace())

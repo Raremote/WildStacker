@@ -85,13 +85,26 @@ public final class EntitiesListener implements Listener {
     private final static Map<Location, Integer> copperGolemStateAmounts = new HashMap<>();
     private final static Material TURTLE_EGG = Materials.getMaterialOrNull("TURTLE_EGG");
     @Nullable
+    private final static Material COD_BUCKET = Materials.getMaterialOrNull("COD_BUCKET");
+    @Nullable
+    private final static Material PUFFERFISH_BUCKET = Materials.getMaterialOrNull("PUFFERFISH_BUCKET");
+    @Nullable
+    private final static Material SALMON_BUCKET = Materials.getMaterialOrNull("SALMON_BUCKET");
+    @Nullable
+    private final static Material TROPICAL_FISH_BUCKET = Materials.getMaterialOrNull("TROPICAL_FISH_BUCKET");
+    @Nullable
+    private final static Material SULFUR_CUBE_BUCKET = Materials.getMaterialOrNull("SULFUR_CUBE_BUCKET");
+    @Nullable
     private final static EntityType COPPER_GOLEM = EntityUtils.getEntityTypeSafe("COPPER_GOLEM");
+    @Nullable
+    private final static EntityType SULFUR_CUBE = EntityUtils.getEntityTypeSafe("SULFUR_CUBE");
 
     public static EntitiesListener IMP;
 
     private final FutureEntityTracker<Integer> slimeSplitTracker = new FutureEntityTracker<>();
     private final FutureEntityTracker<Integer> mushroomTracker = new FutureEntityTracker<>();
     private final FutureEntityTracker<SpawnEggTrackedData> spawnEggTracker = new FutureEntityTracker<>();
+    private final FutureEntityTracker<Integer> bucketEntityTracker = new FutureEntityTracker<>();
     private final WildStackerPlugin plugin;
 
     private boolean duplicateCow = false;
@@ -220,11 +233,13 @@ public final class EntitiesListener implements Listener {
     }
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
-    public void onSpawnerEggUse(PlayerInteractEvent e) {
-        if (e.getAction() != Action.RIGHT_CLICK_BLOCK)
+    public void onItemBasedEntityInteract(PlayerInteractEvent e) {
+        if (e.getAction() != Action.RIGHT_CLICK_BLOCK ||
+                !plugin.getSettings().entitiesStackingEnabled || e.getItem() == null)
             return;
 
-        handleSpawnerEggUse(e.getItem(), e.getClickedBlock(), e.getBlockFace(), e);
+        handleBucketEntityPlace(e.getItem());
+        handleSpawnEggInteractionInternal(e.getItem(), e.getClickedBlock(), e.getBlockFace(), e);
     }
 
     @EventHandler(priority = EventPriority.LOWEST)
@@ -259,6 +274,26 @@ public final class EntitiesListener implements Listener {
         spawnEggTracker.resetTracker();
     }
 
+    @EventHandler(priority = EventPriority.LOWEST)
+    public void onEntitySpawnFromBucket(CreatureSpawnEvent e) {
+        SpawnCause spawnCause = SpawnCause.valueOf(e.getSpawnReason());
+
+        if (spawnCause != SpawnCause.BUCKET || !EntityUtils.isStackable(e.getEntity()))
+            return;
+
+        Optional<Integer> stackAmountOpt = bucketEntityTracker.getTrackedData();
+        if (!stackAmountOpt.isPresent())
+            return;
+
+        int stackAmount = stackAmountOpt.get();
+        EntityStorage.setMetadata(e.getEntity(), EntityFlag.SPAWN_CAUSE, spawnCause);
+        StackedEntity stackedEntity = WStackedEntity.of(e.getEntity());
+        stackedEntity.setStackAmount(stackAmount, false);
+        Executor.sync(stackedEntity::updateName, 1L);
+
+        bucketEntityTracker.resetTracker();
+    }
+
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onPlayerCatchFishWithBucket(PlayerInteractEntityEvent e) {
         ItemStack inHand = e.getPlayer().getItemInHand();
@@ -274,22 +309,19 @@ public final class EntitiesListener implements Listener {
 
         Material fishBucketType = null;
 
-        try {
-            switch (EntityTypes.fromEntity((LivingEntity) e.getRightClicked())) {
-                case COD:
-                    fishBucketType = Material.valueOf("COD_BUCKET");
-                    break;
-                case PUFFERFISH:
-                    fishBucketType = Material.valueOf("PUFFERFISH_BUCKET");
-                    break;
-                case SALMON:
-                    fishBucketType = Material.valueOf("SALMON_BUCKET");
-                    break;
-                case TROPICAL_FISH:
-                    fishBucketType = Material.valueOf("TROPICAL_FISH_BUCKET");
-                    break;
-            }
-        } catch (Exception ignored) {
+        switch (EntityTypes.fromEntity((LivingEntity) e.getRightClicked())) {
+            case COD:
+                fishBucketType = COD_BUCKET;
+                break;
+            case PUFFERFISH:
+                fishBucketType = PUFFERFISH_BUCKET;
+                break;
+            case SALMON:
+                fishBucketType = SALMON_BUCKET;
+                break;
+            case TROPICAL_FISH:
+                fishBucketType = TROPICAL_FISH_BUCKET;
+                break;
         }
 
         if (fishBucketType == null)
@@ -305,6 +337,33 @@ public final class EntitiesListener implements Listener {
         ItemUtils.removeItemFromHand(e.getPlayer(), 1, usedHand);
 
         ItemUtils.addItem(fishBucketItem, e.getPlayer().getInventory(), e.getRightClicked().getLocation());
+    }
+
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
+    public void onPlayerCatchSulfurCubeWithBucket(PlayerInteractEntityEvent e) {
+        if (SULFUR_CUBE_BUCKET == null || SULFUR_CUBE == null)
+            return;
+
+        ItemStack inHand = e.getPlayer().getItemInHand();
+        if (inHand == null || inHand.getType() != Material.BUCKET || e.getRightClicked().getType() != SULFUR_CUBE)
+            return;
+
+        StackedEntity stackedEntity = WStackedEntity.of(e.getRightClicked());
+        if (stackedEntity.getStackAmount() <= 1)
+            return;
+
+        e.setCancelled(true);
+
+        ItemStack sulfurBucketItem = ItemUtils.setSpawnerItemAmount(
+                plugin.getNMSAdapter().createSulfurCubeBucketItem(e.getRightClicked()),
+                stackedEntity.getStackAmount());
+
+        stackedEntity.remove();
+
+        EquipmentSlot usedHand = ItemUtils.getHand(e);
+        ItemUtils.removeItemFromHand(e.getPlayer(), 1, usedHand);
+
+        ItemUtils.addItem(sulfurBucketItem, e.getPlayer().getInventory(), e.getRightClicked().getLocation());
     }
 
     @EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = true)
@@ -624,10 +683,25 @@ public final class EntitiesListener implements Listener {
      *  General methods
      */
 
-    public boolean handleSpawnerEggUse(ItemStack usedItem, Block clickedBlock, BlockFace blockFace, PlayerInteractEvent event) {
-        if (!plugin.getSettings().entitiesStackingEnabled || usedItem == null ||
-                plugin.getSettings().blacklistedEntities.contains(SpawnCause.SPAWNER_EGG) ||
-                (!Materials.isValidAndSpawnEgg(usedItem) && !Materials.isFishBucket(usedItem)))
+    private void handleBucketEntityPlace(ItemStack usedItem) {
+        Material itemType = usedItem.getType();
+
+        if (itemType != SULFUR_CUBE_BUCKET && !Materials.isFishBucket(itemType))
+            return;
+
+        int stackAmount = ItemUtils.getSpawnerItemAmount(usedItem);
+        if (stackAmount > 1)
+            bucketEntityTracker.startTracking(stackAmount, 1);
+    }
+
+    public boolean handleSpawnEggInteraction(@Nullable ItemStack usedItem, Block clickedBlock, BlockFace blockFace, PlayerInteractEvent event) {
+        return plugin.getSettings().entitiesStackingEnabled && usedItem != null &&
+                handleSpawnEggInteractionInternal(usedItem, clickedBlock, blockFace, event);
+    }
+
+    private boolean handleSpawnEggInteractionInternal(ItemStack usedItem, Block clickedBlock, BlockFace blockFace, PlayerInteractEvent event) {
+        if (plugin.getSettings().blacklistedEntities.contains(SpawnCause.SPAWNER_EGG) ||
+                !Materials.isValidAndSpawnEgg(usedItem))
             return false;
 
         SpawnEggTrackedData trackedData = new SpawnEggTrackedData();
