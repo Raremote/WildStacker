@@ -6,6 +6,7 @@ import com.bgsoftware.wildstacker.api.enums.StackResult;
 import com.bgsoftware.wildstacker.api.enums.UnstackResult;
 import com.bgsoftware.wildstacker.api.objects.StackedItem;
 import com.bgsoftware.wildstacker.api.objects.StackedObject;
+import com.bgsoftware.wildstacker.utils.FoliaUtils;
 import com.bgsoftware.wildstacker.utils.ServerVersion;
 import com.bgsoftware.wildstacker.utils.entity.EntitiesGetter;
 import com.bgsoftware.wildstacker.utils.entity.EntityStorage;
@@ -142,10 +143,10 @@ public final class WStackedItem extends WAsyncStackedObject<Item> implements Sta
 
         /* Items must be removed sync, otherwise they are not properly removed from chunks.
         Also, in 1.17, the remove() function must be called sync. */
-        Executor.sync(object::remove);
+        Executor.sync(object::remove, object);
 
         EntityStorage.setMetadata(object, EntityFlag.REMOVED_ENTITY, true);
-        Executor.sync(() -> EntityStorage.clearMetadata(object), 100L);
+        Executor.sync(() -> EntityStorage.clearMetadata(object), object, 100L);
     }
 
     @Override
@@ -182,7 +183,7 @@ public final class WStackedItem extends WAsyncStackedObject<Item> implements Sta
 
         String CUSTOM_NAME = customName;
 
-        Executor.sync(() -> {
+        FoliaUtils.runEntityTask(plugin, getItem(), () -> {
             if (updateName) {
                 setCustomName(CUSTOM_NAME);
             }
@@ -238,7 +239,7 @@ public final class WStackedItem extends WAsyncStackedObject<Item> implements Sta
         Executor.sync(() -> {
             if (targetItem.getItem().isValid())
                 targetItem.updateName();
-        }, 2L);
+        }, targetItem.getItem(), 2L);
 
         this.remove();
 
@@ -375,44 +376,41 @@ public final class WStackedItem extends WAsyncStackedObject<Item> implements Sta
 
     @Override
     public void runStackAsync(Consumer<Optional<Item>> result) {
-        int range = getMergeRadius();
-
-        if (range <= 0 || getStackLimit() <= 1) {
-            if (result != null)
-                result.accept(Optional.empty());
-            return;
-        }
-
         // Should be called sync due to collecting nearby entities
-        if (!Bukkit.isPrimaryThread()) {
-            Executor.sync(() -> runStackAsync(result));
-            return;
-        }
+        FoliaUtils.runEntityTask(plugin, getItem(), () -> {
+            int range = getMergeRadius();
 
-        Location itemLocation = getItem().getLocation();
-        Optional<StackedItem> itemOptional = EntitiesGetter.getNearbyEntities(itemLocation, range, ItemUtils::isStackable)
-                .map(entity -> WStackedItem.ofBypass((Item) entity))
-                .filter(stackedItem -> runStackCheck(stackedItem) == StackCheckResult.SUCCESS)
-                .findFirst();
+            if (range <= 0 || getStackLimit() <= 1) {
+                if (result != null)
+                    result.accept(Optional.empty());
+                return;
+            }
 
-        if (itemOptional.isPresent()) {
-            runStackAsync(itemOptional.get(), stackResult -> {
-                if (stackResult == StackResult.SUCCESS) {
-                    if (result != null)
-                        result.accept(itemOptional.map(StackedItem::getItem));
-                } else {
-                    updateName();
+            Location itemLocation = getItem().getLocation();
+            Optional<StackedItem> itemOptional = EntitiesGetter.getNearbyEntities(itemLocation, range, ItemUtils::isStackable)
+                    .map(entity -> WStackedItem.ofBypass((Item) entity))
+                    .filter(stackedItem -> runStackCheck(stackedItem) == StackCheckResult.SUCCESS)
+                    .findFirst();
 
-                    if (result != null)
-                        result.accept(Optional.empty());
-                }
-            });
-        } else {
-            updateName();
+            if (itemOptional.isPresent()) {
+                runStackAsync(itemOptional.get(), stackResult -> {
+                    if (stackResult == StackResult.SUCCESS) {
+                        if (result != null)
+                            result.accept(itemOptional.map(StackedItem::getItem));
+                    } else {
+                        updateName();
 
-            if (result != null)
-                result.accept(Optional.empty());
-        }
+                        if (result != null)
+                            result.accept(Optional.empty());
+                    }
+                });
+            } else {
+                updateName();
+
+                if (result != null)
+                    result.accept(Optional.empty());
+            }
+        });
     }
 
     @Override

@@ -95,3 +95,5 @@ permissions:
     description: Gives access to use the toggle command if enabled.
   wildstacker.charge.bypass:
     description: Bypass charging for placing and breaking spawners
+
+folia-supported: true

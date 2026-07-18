@@ -7,6 +7,7 @@ import com.bgsoftware.wildstacker.api.enums.StackSplit;
 import com.bgsoftware.wildstacker.api.objects.StackedEntity;
 import com.bgsoftware.wildstacker.api.objects.StackedItem;
 import com.bgsoftware.wildstacker.objects.WStackedEntity;
+import com.bgsoftware.wildstacker.utils.FoliaUtils;
 import com.bgsoftware.wildstacker.utils.Random;
 import com.bgsoftware.wildstacker.utils.ServerVersion;
 import com.bgsoftware.wildstacker.utils.entity.EntitiesGetter;
@@ -222,6 +223,19 @@ public final class EntitiesListener implements Listener {
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onEntitySpawn(CreatureSpawnEvent e) {
+        if (FoliaUtils.isFolia()) {
+            if (!plugin.getSettings().entitiesStackingEnabled)
+                return;
+            if (!EntityUtils.isStackable(e.getEntity()))
+                return;
+
+            EntityStorage.setMetadata(e.getEntity(), EntityFlag.SPAWN_CAUSE, SpawnCause.valueOf(e.getSpawnReason()));
+            StackedEntity stackedEntity = WStackedEntity.of(e.getEntity());
+            // Entity not valid during CreatureSpawnEvent on Folia — defer to next tick
+            Executor.sync(() -> stackedEntity.runStackAsync(null), e.getEntity(), 1L);
+            return;
+        }
+
         if (duplicateCow && e.getEntityType() == EntityType.COW) {
             duplicateCow = false;
             e.setCancelled(true);
@@ -369,7 +383,7 @@ public final class EntitiesListener implements Listener {
     @EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = true)
     public void onSlimeSplitAsyncCatch(SlimeSplitEvent e) {
         //Fixes a async catch exception with auto-clear task
-        if (!Bukkit.isPrimaryThread())
+        if (!FoliaUtils.isGlobalOrPrimaryThread())
             e.setCancelled(true);
     }
 
@@ -646,6 +660,8 @@ public final class EntitiesListener implements Listener {
 
     @EventHandler(priority = EventPriority.MONITOR)
     public void onCreatureSpawnMonitor(CreatureSpawnEvent event) {
+        if (FoliaUtils.isFolia() && event.getSpawnReason() == CreatureSpawnEvent.SpawnReason.SPAWNER && event.isCancelled())
+            event.setCancelled(false);
         if (event.isCancelled())
             handleEntityCacheClear(event.getEntity());
     }

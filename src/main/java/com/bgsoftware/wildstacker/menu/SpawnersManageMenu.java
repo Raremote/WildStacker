@@ -9,6 +9,7 @@ import com.bgsoftware.wildstacker.utils.pair.Pair;
 import com.bgsoftware.wildstacker.utils.spawners.SpawnerCachedData;
 import com.bgsoftware.wildstacker.utils.spawners.SyncedCreatureSpawner;
 import com.bgsoftware.wildstacker.utils.threads.Executor;
+import org.bukkit.Location;
 import org.bukkit.entity.Player;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryCloseEvent;
@@ -99,6 +100,12 @@ public final class SpawnersManageMenu extends WildMenu {
     @Override
     public void onMenuClose(InventoryCloseEvent e) {
 
+    }
+
+    @Override
+    protected Location getMenuLocation() {
+        StackedSpawner spawner = this.stackedSpawner.get();
+        return spawner != null ? spawner.getLocation() : null;
     }
 
     public void onInventoryBuild() {

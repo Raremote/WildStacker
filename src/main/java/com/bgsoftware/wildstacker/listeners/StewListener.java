@@ -3,6 +3,7 @@ package com.bgsoftware.wildstacker.listeners;
 import com.bgsoftware.wildstacker.WildStackerPlugin;
 import com.bgsoftware.wildstacker.utils.items.ItemUtils;
 import com.bgsoftware.wildstacker.utils.legacy.Materials;
+import com.bgsoftware.wildstacker.utils.threads.Executor;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.event.EventHandler;
@@ -31,7 +32,7 @@ public final class StewListener implements Listener {
 
         int consumedItemSlot = e.getItem().equals(e.getPlayer().getInventory().getItem(heldSlot)) ? heldSlot : 40;
 
-        Bukkit.getScheduler().runTask(plugin, () -> {
+        Executor.sync(() -> {
             e.getPlayer().getInventory().setItem(consumedItemSlot, inHand);
             e.getPlayer().getInventory().addItem(new ItemStack(Material.BOWL));
             ItemUtils.stackStew(e.getItem(), e.getPlayer().getInventory());

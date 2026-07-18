@@ -57,14 +57,14 @@ public final class DataHandler {
             try {
                 if (!DBSession.createConnection(plugin)) {
                     WildStackerPlugin.log("&cCouldn't connect to database, closing server...");
-                    Bukkit.getScheduler().runTask(plugin, () -> Bukkit.getPluginManager().disablePlugin(plugin));
+                    Executor.sync(() -> Bukkit.getPluginManager().disablePlugin(plugin));
                     return;
                 }
 
                 loadDatabase();
             } catch (Exception ex) {
                 ex.printStackTrace();
-                Bukkit.getScheduler().runTask(plugin, () -> Bukkit.getPluginManager().disablePlugin(plugin));
+                Executor.sync(() -> Bukkit.getPluginManager().disablePlugin(plugin));
                 return;
             }
         }, 1L);
@@ -80,7 +80,7 @@ public final class DataHandler {
 
     public void removeStackedSpawner(StackedSpawner stackedSpawner) {
         this.stackedSpawnerStore.remove(stackedSpawner.getLocation());
-        Executor.sync(() -> ((WStackedSpawner) stackedSpawner).removeHologram());
+        Executor.sync(() -> ((WStackedSpawner) stackedSpawner).removeHologram(), stackedSpawner.getLocation());
     }
 
     public void addStackedBarrel(StackedBarrel stackedBarrel) {
@@ -90,7 +90,7 @@ public final class DataHandler {
     public void removeStackedBarrel(StackedBarrel stackedBarrel) {
         this.stackedBarrelStore.remove(stackedBarrel.getLocation());
         stackedBarrel.removeDisplayBlock();
-        Executor.sync(() -> ((WStackedBarrel) stackedBarrel).removeHologram());
+        Executor.sync(() -> ((WStackedBarrel) stackedBarrel).removeHologram(), stackedBarrel.getLocation());
     }
 
     public List<StackedObject> getStackedObjects() {

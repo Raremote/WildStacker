@@ -89,12 +89,10 @@ public final class ItemsListener implements Listener {
             if (optionalItem.isPresent())
                 return;
 
-            Executor.sync(() -> {
-                if (EntityStorage.hasMetadata(e.getEntity(), EntityFlag.DROPPED_BY_PLAYER))
-                    EntityStorage.removeMetadata(e.getEntity(), EntityFlag.DROPPED_BY_PLAYER);
-                else if (isChunkLimit(e.getLocation().getChunk()))
-                    stackedItem.remove();
-            });
+            if (EntityStorage.hasMetadata(e.getEntity(), EntityFlag.DROPPED_BY_PLAYER))
+                EntityStorage.removeMetadata(e.getEntity(), EntityFlag.DROPPED_BY_PLAYER);
+            else if (isChunkLimit(e.getLocation().getChunk()))
+                stackedItem.remove();
         });
     }
 
@@ -200,7 +198,7 @@ public final class ItemsListener implements Listener {
                     StackedItem targetItem = WStackedItem.ofBypass(e.getTarget());
                     stackedItem.runStackAsync(targetItem, null);
                 }
-            }, 5L);
+            }, e.getTarget(), 5L);
         }
 
     }

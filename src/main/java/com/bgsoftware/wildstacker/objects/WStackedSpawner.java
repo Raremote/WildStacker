@@ -1,5 +1,6 @@
 package com.bgsoftware.wildstacker.objects;
 
+import com.bgsoftware.wildstacker.WildStackerPlugin;
 import com.bgsoftware.wildstacker.api.enums.StackCheckResult;
 import com.bgsoftware.wildstacker.api.enums.StackResult;
 import com.bgsoftware.wildstacker.api.enums.UnstackResult;
@@ -7,6 +8,7 @@ import com.bgsoftware.wildstacker.api.objects.StackedObject;
 import com.bgsoftware.wildstacker.api.objects.StackedSpawner;
 import com.bgsoftware.wildstacker.api.upgrades.SpawnerUpgrade;
 import com.bgsoftware.wildstacker.menu.SpawnersManageMenu;
+import com.bgsoftware.wildstacker.utils.FoliaUtils;
 import com.bgsoftware.wildstacker.utils.GeneralUtils;
 import com.bgsoftware.wildstacker.utils.entity.EntityUtils;
 import com.bgsoftware.wildstacker.utils.events.EventsCaller;
@@ -167,46 +169,38 @@ public final class WStackedSpawner extends WStackedHologramObject<CreatureSpawne
 
     @Override
     public void remove() {
-        if (!Bukkit.isPrimaryThread()) {
-            Executor.sync(this::remove);
-            return;
-        }
-
-        plugin.getSystemManager().removeStackObject(this);
-
-        plugin.getDataHandler().deleteSpawner(getLocation());
-
-        removeHologram();
+        FoliaUtils.runRegionTask(plugin, getLocation(), () -> {
+            plugin.getSystemManager().removeStackObject(this);
+            plugin.getDataHandler().deleteSpawner(getLocation());
+            removeHologram();
 
         if (spawnersManageMenu != null) {
             spawnersManageMenu.getInventory().getViewers().forEach(HumanEntity::closeInventory);
             spawnersManageMenu.stop();
             unlinkInventory();
         }
+        });
     }
 
     @Override
     public void updateName() {
-        if (!Bukkit.isPrimaryThread()) {
-            Executor.sync(this::updateName);
-            return;
-        }
+        FoliaUtils.runRegionTask(plugin, getLocation(), () -> {
+            String customName = plugin.getSettings().spawnersCustomName;
 
-        String customName = plugin.getSettings().spawnersCustomName;
+            if (customName.isEmpty())
+                return;
 
-        if (customName.isEmpty())
-            return;
+            int amount = getStackAmount();
 
-        int amount = getStackAmount();
+            if ((amount < 1 || (amount == 1 && !plugin.getSettings().spawnersUnstackedCustomName)) && isDefaultUpgrade()) {
+                removeHologram();
+                return;
+            }
 
-        if ((amount < 1 || (amount == 1 && !plugin.getSettings().spawnersUnstackedCustomName)) && isDefaultUpgrade()) {
-            removeHologram();
-            return;
-        }
-
-        setCachedDisplayName(EntityUtils.getFormattedType(getSpawnedType().name()));
-        customName = plugin.getSettings().spawnersNameBuilder.build(this);
-        setHologramName(customName, !plugin.getSettings().floatingSpawnerNames);
+            setCachedDisplayName(EntityUtils.getFormattedType(getSpawnedType().name()));
+            customName = plugin.getSettings().spawnersNameBuilder.build(this);
+            setHologramName(customName, !plugin.getSettings().floatingSpawnerNames);
+        });
     }
 
     @Override

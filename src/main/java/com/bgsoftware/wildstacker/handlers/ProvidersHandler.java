@@ -8,6 +8,7 @@ import com.bgsoftware.wildstacker.hooks.ConflictPluginFixer;
 import com.bgsoftware.wildstacker.hooks.CustomItemProvider;
 import com.bgsoftware.wildstacker.hooks.EconomyProvider;
 import com.bgsoftware.wildstacker.hooks.EconomyProvider_Default;
+import com.bgsoftware.wildstacker.utils.FoliaUtils;
 import com.bgsoftware.wildstacker.hooks.EntityNameProvider;
 import com.bgsoftware.wildstacker.hooks.EntitySimilarityProvider;
 import com.bgsoftware.wildstacker.hooks.EntityTypeProvider;
@@ -73,7 +74,7 @@ public final class ProvidersHandler {
     public ProvidersHandler(WildStackerPlugin plugin) {
         this.plugin = plugin;
 
-        Executor.sync(() -> {
+        Runnable initTask = () -> {
             WildStackerPlugin.log("Loading providers started...");
             long startTime = System.currentTimeMillis();
 
@@ -96,7 +97,13 @@ public final class ProvidersHandler {
                 Bukkit.getPluginManager().registerEvents(new PaperListener(), plugin);
 
             WildStackerPlugin.log("Loading providers done (Took " + (System.currentTimeMillis() - startTime) + "ms)");
-        }, 0L);
+        };
+
+        if (FoliaUtils.isFolia()) {
+            initTask.run();
+        } else {
+            Executor.sync(initTask, 0L);
+        }
 
         Executor.sync(() -> {
             if (Bukkit.getPluginManager().isPluginEnabled("ASkyBlock") &&
@@ -440,6 +447,8 @@ public final class ProvidersHandler {
     }
 
     public SpawnersProvider getSpawnersProvider() {
+        if (spawnersProvider == null)
+            spawnersProvider = new SpawnersProvider_Default();
         return spawnersProvider;
     }
 
@@ -586,7 +595,8 @@ public final class ProvidersHandler {
             Class<?> clazz = Class.forName("com.bgsoftware.wildstacker.hooks." + className);
             Method registerMethod = clazz.getMethod("register", WildStackerPlugin.class);
             registerMethod.invoke(null, plugin);
-        } catch (Exception ignored) {
+        } catch (Exception ex) {
+            WildStackerPlugin.log(" - Failed to register hook " + className + ": " + ex.getMessage());
         }
     }
 

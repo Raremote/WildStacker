@@ -32,6 +32,7 @@ import com.bgsoftware.wildstacker.objects.WUnloadedStackedSpawner;
 import com.bgsoftware.wildstacker.tasks.ItemsMerger;
 import com.bgsoftware.wildstacker.tasks.KillTask;
 import com.bgsoftware.wildstacker.tasks.StackTask;
+import com.bgsoftware.wildstacker.utils.FoliaUtils;
 import com.bgsoftware.wildstacker.utils.GeneralUtils;
 import com.bgsoftware.wildstacker.utils.ServerVersion;
 import com.bgsoftware.wildstacker.utils.data.structures.FastEnumMap;
@@ -105,9 +106,9 @@ public final class SystemHandler implements SystemManager {
         }, 1L);
 
         //Start the auto-clear
-        Bukkit.getScheduler().runTaskTimerAsynchronously(plugin, this::performCacheClear, 100L, 100L);
+        Executor.timerAsync(this::performCacheClear, 100L);
         //Start the auto-save
-        Bukkit.getScheduler().runTaskTimer(plugin, this::performCacheSave, 300L, 300L);
+        Executor.timer(this::performCacheSave, 300L);
     }
 
     public IDataSerializer getDataSerializer() {
@@ -179,7 +180,7 @@ public final class SystemHandler implements SystemManager {
             Executor.sync(() -> {
                 if (item.isDead())
                     dataHandler.stackedItemStore.remove(item.getEntityId());
-            }, 10L);
+            }, item, 10L);
         }
 
         dataHandler.stackedItemStore.loadUnloaded(item.getUniqueId(), stackedItem);
@@ -199,7 +200,11 @@ public final class SystemHandler implements SystemManager {
             return stackedSpawner;
 
         //Spawner wasn't found, creating a new object
-        stackedSpawner = new WStackedSpawner((CreatureSpawner) location.getBlock().getState());
+        try {
+            stackedSpawner = new WStackedSpawner((CreatureSpawner) location.getBlock().getState());
+        } catch (IllegalStateException ex) {
+            return null;
+        }
 
         //A new spawner was created. Let's see if we need to add him
         if (stackedSpawner.isCached())
@@ -360,7 +365,7 @@ public final class SystemHandler implements SystemManager {
 
     @Override
     public void performCacheSave() {
-        if (!Bukkit.isPrimaryThread()) {
+        if (!FoliaUtils.isGlobalOrPrimaryThread()) {
             Executor.sync(this::performCacheSave);
             return;
         }
@@ -480,8 +485,8 @@ public final class SystemHandler implements SystemManager {
             Executor.sync(() -> {
                 plugin.getNMSEntities().playDeathSound(livingEntity);
                 livingEntity.setHealth(0);
-                Executor.sync(() -> EntityStorage.clearMetadata(livingEntity), 1L);
-            }, 2L);
+                Executor.sync(() -> EntityStorage.clearMetadata(livingEntity), livingEntity, 1L);
+            }, livingEntity, 2L);
         }
     }
 
@@ -504,9 +509,44 @@ public final class SystemHandler implements SystemManager {
         performKillAll(entityPredicate, itemPredicate, false);
     }
 
+    public void performKillAllForChunk(Chunk chunk) {
+        for (Entity entity : chunk.getEntities()) {
+            if (entity instanceof LivingEntity && EntityUtils.isStackable(entity)) {
+                StackedEntity stackedEntity = WStackedEntity.of(entity);
+                if (stackedEntity.hasNameTag())
+                    continue;
+                if (!GeneralUtils.containsOrEmpty(plugin.getSettings().killTaskEntitiesWhitelist, stackedEntity))
+                    continue;
+                if (GeneralUtils.contains(plugin.getSettings().killTaskEntitiesBlacklist, stackedEntity))
+                    continue;
+                if (plugin.getSettings().killTaskStackedEntities && stackedEntity.getStackAmount() > 1)
+                    stackedEntity.remove();
+                else if (plugin.getSettings().killTaskUnstackedEntities && stackedEntity.getStackAmount() <= 1)
+                    stackedEntity.remove();
+            }
+        }
+
+        if (plugin.getSettings().killTaskStackedItems) {
+            for (Entity entity : chunk.getEntities()) {
+                if (entity instanceof Item && ItemUtils.isStackable(entity) && ItemUtils.canPickup((Item) entity)) {
+                    StackedItem stackedItem = WStackedItem.of(entity);
+                    int maxStackSize = ((Item) entity).getItemStack().getMaxStackSize();
+                    if (!GeneralUtils.containsOrEmpty(plugin.getSettings().killTaskItemsWhitelist, ((Item) entity).getItemStack().getType()))
+                        continue;
+                    if (plugin.getSettings().killTaskItemsBlacklist.contains(((Item) entity).getItemStack().getType()))
+                        continue;
+                    if (stackedItem.getStackAmount() > maxStackSize)
+                        stackedItem.remove();
+                    else if (plugin.getSettings().killTaskUnstackedItems && stackedItem.getStackAmount() <= maxStackSize)
+                        stackedItem.remove();
+                }
+            }
+        }
+    }
+
     @Override
     public void performKillAll(Predicate<Entity> entityPredicate, Predicate<Item> itemPredicate, boolean applyTaskFilter) {
-        if (!Bukkit.isPrimaryThread()) {
+        if (!FoliaUtils.isGlobalOrPrimaryThread()) {
             Executor.sync(() -> performKillAll(entityPredicate, itemPredicate, applyTaskFilter));
             return;
         }
@@ -530,17 +570,16 @@ public final class SystemHandler implements SystemManager {
             }
         }
 
-        Executor.async(() -> {
-            entityList.stream()
-                    .filter(entity -> EntityUtils.isStackable(entity) && entityPredicate.test(entity) &&
-                            (!applyTaskFilter || (GeneralUtils.containsOrEmpty(plugin.getSettings().killTaskEntitiesWhitelist, WStackedEntity.of(entity)) &&
-                                    !GeneralUtils.contains(plugin.getSettings().killTaskEntitiesBlacklist, WStackedEntity.of(entity)))))
-                    .forEach(entity -> {
-                        StackedEntity stackedEntity = WStackedEntity.of(entity);
-                        if (!applyTaskFilter || (((plugin.getSettings().killTaskStackedEntities && stackedEntity.getStackAmount() > 1) ||
-                                (plugin.getSettings().killTaskUnstackedEntities && stackedEntity.getStackAmount() <= 1)) && !stackedEntity.hasNameTag()))
-                            stackedEntity.remove();
-                    });
+        entityList.stream()
+                .filter(entity -> EntityUtils.isStackable(entity) && entityPredicate.test(entity) &&
+                        (!applyTaskFilter || (GeneralUtils.containsOrEmpty(plugin.getSettings().killTaskEntitiesWhitelist, WStackedEntity.of(entity)) &&
+                                !GeneralUtils.contains(plugin.getSettings().killTaskEntitiesBlacklist, WStackedEntity.of(entity)))))
+                .forEach(entity -> {
+                    StackedEntity stackedEntity = WStackedEntity.of(entity);
+                    if (!applyTaskFilter || (((plugin.getSettings().killTaskStackedEntities && stackedEntity.getStackAmount() > 1) ||
+                            (plugin.getSettings().killTaskUnstackedEntities && stackedEntity.getStackAmount() <= 1)) && !stackedEntity.hasNameTag()))
+                        stackedEntity.remove();
+                });
 
             if (plugin.getSettings().killTaskStackedItems) {
                 entityList.stream()
@@ -560,7 +599,6 @@ public final class SystemHandler implements SystemManager {
                 if (pl.isOp())
                     Locale.KILL_ALL_OPS.send(pl);
             }
-        });
     }
 
     @Override

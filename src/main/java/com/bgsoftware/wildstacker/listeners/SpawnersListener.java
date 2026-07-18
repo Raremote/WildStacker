@@ -3,6 +3,7 @@ package com.bgsoftware.wildstacker.listeners;
 import com.bgsoftware.wildstacker.Locale;
 import com.bgsoftware.wildstacker.WildStackerPlugin;
 import com.bgsoftware.wildstacker.api.enums.EntityFlag;
+import com.bgsoftware.wildstacker.utils.FoliaUtils;
 import com.bgsoftware.wildstacker.api.enums.SpawnCause;
 import com.bgsoftware.wildstacker.api.enums.StackCheckResult;
 import com.bgsoftware.wildstacker.api.enums.UnstackResult;
@@ -278,7 +279,7 @@ public final class SpawnersListener implements Listener {
 
                         finishSpawnerPlace(e.getPlayer(), stackedSpawner, amountToCharge,
                                 REPLACE_AIR, usedHand, LIMIT_ITEM, spawnerType, SPAWNER_ITEM_AMOUNT);
-                    }, 1L);
+                    }, stackedSpawner.getLocation(), 1L);
 
                     return;
                 }
@@ -426,7 +427,7 @@ public final class SpawnersListener implements Listener {
             Executor.sync(() -> {
                 EntitiesGetter.getNearbyEntities(location, 1, entity -> entity instanceof TNTPrimed)
                         .findFirst().ifPresent(entity -> explodableSources.put(entity, e.getPlayer().getUniqueId()));
-            }, 2L);
+            }, location, 2L);
         }
     }
 
@@ -472,8 +473,6 @@ public final class SpawnersListener implements Listener {
         EntityStorage.setMetadata(e.getEntity(), EntityFlag.SPAWN_CAUSE, SpawnCause.SPAWNER);
         StackedEntity stackedEntity = WStackedEntity.of(e.getEntity());
 
-        stackedEntity.updateNerfed();
-
         ((WStackedEntity) stackedEntity).setUpgradeId(stackedSpawner.getUpgradeId());
 
         int minimumEntityRequirement = GeneralUtils.get(plugin.getSettings().minimumRequiredEntities, stackedEntity, 1);
@@ -492,11 +491,13 @@ public final class SpawnersListener implements Listener {
             if (stackedSpawner.getStackAmount() > 1)
                 spawnEntities(stackedSpawner, stackedEntity, stackedSpawner.getStackAmount(), multipleEntities ? 1 : stackedEntity.getStackLimit());
         } else {
-            if (stackedSpawner.isDebug())
-                Debug.debug("SpawnersListener", "onSpawnerSpawn", "Changing amount to " + stackedEntity.getUniqueId());
-            stackedEntity.setStackAmount(stackedSpawner.getStackAmount(), true);
-            // It takes one tick to set the entity as valid in some versions
-            Executor.sync(() -> stackedEntity.runSpawnerStackAsync(stackedSpawner, null), 1L);
+            // Entity is not yet valid during SpawnerSpawnEvent on Folia — defer to next tick
+            int spawnerStackAmount = stackedSpawner.getStackAmount();
+            Executor.sync(() -> {
+                stackedEntity.updateNerfed();
+                stackedEntity.setStackAmount(spawnerStackAmount, false);
+                stackedEntity.runSpawnerStackAsync(stackedSpawner, null);
+            }, stackedSpawner.getLocation(), 1L);
 
         }
     }
@@ -618,7 +619,7 @@ public final class SpawnersListener implements Listener {
             stackedSpawner.updateName();
             if (e.getPlayer().getGameMode() != GameMode.CREATIVE && plugin.getSettings().eggsStackMultiply)
                 ItemUtils.removeItemFromHand(e.getPlayer().getInventory(), inHand, stackedSpawner.getStackAmount() - 1);
-        }, 2L);
+        }, stackedSpawner.getLocation(), 2L);
     }
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
@@ -649,7 +650,7 @@ public final class SpawnersListener implements Listener {
             customName = plugin.getSettings().spawnersNameBuilder.build(stackedSpawner);
             ((WStackedSpawner) stackedSpawner).setHologramName(customName, true);
 
-            Executor.sync(((WStackedSpawner) stackedSpawner)::removeHologram, 60L);
+            Executor.sync(((WStackedSpawner) stackedSpawner)::removeHologram, ((WStackedSpawner) stackedSpawner).getLocation(), 60L);
         }
     }
 

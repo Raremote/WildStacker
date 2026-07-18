@@ -12,6 +12,7 @@ import com.bgsoftware.wildstacker.objects.WStackedEntity;
 import com.bgsoftware.wildstacker.objects.WStackedSpawner;
 import com.bgsoftware.wildstacker.utils.entity.EntityUtils;
 import com.bgsoftware.wildstacker.utils.items.ItemUtils;
+import com.bgsoftware.wildstacker.utils.threads.Executor;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -119,7 +120,7 @@ public final class ToolsListener implements Listener {
 
         if (firstObject == null) {
             simulateObjects.put(player.getUniqueId(), stackedObject);
-            Bukkit.getScheduler().runTaskLater(plugin, () -> simulateObjects.remove(player.getUniqueId()), 1200L);
+            Executor.sync(() -> simulateObjects.remove(player.getUniqueId()), 1200L);
             Locale.OBJECT_SIMULATE_CHOOSE_SECOND.send(player);
         } else if (stackedObject != firstObject) {
             simulateObjects.remove(player.getUniqueId());

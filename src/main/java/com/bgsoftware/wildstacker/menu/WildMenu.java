@@ -1,11 +1,13 @@
 package com.bgsoftware.wildstacker.menu;
 
 import com.bgsoftware.wildstacker.WildStackerPlugin;
+import com.bgsoftware.wildstacker.utils.FoliaUtils;
 import com.bgsoftware.wildstacker.utils.files.SoundWrapper;
 import com.bgsoftware.wildstacker.utils.items.ItemBuilder;
 import com.bgsoftware.wildstacker.utils.pair.Pair;
 import com.bgsoftware.wildstacker.utils.threads.Executor;
 import org.bukkit.Bukkit;
+import org.bukkit.Location;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.entity.Player;
 import org.bukkit.event.inventory.InventoryClickEvent;
@@ -35,6 +37,10 @@ public abstract class WildMenu implements InventoryHolder {
 
     protected WildMenu(String identifier) {
         this.identifier = identifier;
+    }
+
+    protected Location getMenuLocation() {
+        return null;
     }
 
     protected static List<Integer> getSlots(ConfigurationSection section, String key, Map<Character, List<Integer>> charSlots) {
@@ -117,7 +123,7 @@ public abstract class WildMenu implements InventoryHolder {
             }
         }
 
-        Executor.sync(() -> {
+        Runnable openTask = () -> {
             if (!player.isOnline())
                 return;
 
@@ -127,7 +133,17 @@ public abstract class WildMenu implements InventoryHolder {
             onInventoryBuild();
 
             player.openInventory(inventory);
-        });
+        };
+
+        if (FoliaUtils.hasSchedulerApi()) {
+            Location menuLocation = getMenuLocation();
+            if (menuLocation != null && menuLocation.getWorld() != null)
+                Executor.sync(openTask, menuLocation);
+            else
+                Executor.sync(openTask);
+        } else {
+            Executor.sync(openTask);
+        }
     }
 
     protected Inventory buildInventory() {

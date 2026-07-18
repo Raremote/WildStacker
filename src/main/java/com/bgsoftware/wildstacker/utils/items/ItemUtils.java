@@ -3,6 +3,7 @@ package com.bgsoftware.wildstacker.utils.items;
 import com.bgsoftware.common.reflection.ReflectMethod;
 import com.bgsoftware.wildstacker.WildStackerPlugin;
 import com.bgsoftware.wildstacker.api.upgrades.SpawnerUpgrade;
+import com.bgsoftware.wildstacker.utils.FoliaUtils;
 import com.bgsoftware.wildstacker.utils.ServerVersion;
 import com.bgsoftware.wildstacker.utils.entity.EntityUtils;
 import com.bgsoftware.wildstacker.utils.legacy.EntityTypes;
@@ -84,13 +85,10 @@ public final class ItemUtils {
     }
 
     public static void dropItem(ItemStack itemStack, Location location) {
-        if (!Bukkit.isPrimaryThread()) {
-            Executor.sync(() -> dropItem(itemStack, location));
-            return;
-        }
+        FoliaUtils.runRegionTask(plugin, location, () -> {
 
-        if (itemStack.getType() == Material.AIR || itemStack.getAmount() <= 0)
-            return;
+            if (itemStack.getType() == Material.AIR || itemStack.getAmount() <= 0)
+                return;
 
         int amount = itemStack.getAmount();
 
@@ -116,6 +114,7 @@ public final class ItemUtils {
             WildStackerPlugin.log("Error while dropping " + itemStack + ":");
             ex.printStackTrace();
         }
+        });
     }
 
     public static ItemStack setSpawnerItemAmount(ItemStack itemStack, int amount) {

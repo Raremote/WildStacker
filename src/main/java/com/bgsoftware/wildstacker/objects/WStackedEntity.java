@@ -11,6 +11,7 @@ import com.bgsoftware.wildstacker.api.objects.StackedObject;
 import com.bgsoftware.wildstacker.api.objects.StackedSpawner;
 import com.bgsoftware.wildstacker.api.upgrades.SpawnerUpgrade;
 import com.bgsoftware.wildstacker.loot.LootTable;
+import com.bgsoftware.wildstacker.utils.FoliaUtils;
 import com.bgsoftware.wildstacker.utils.GeneralUtils;
 import com.bgsoftware.wildstacker.utils.entity.EntitiesGetter;
 import com.bgsoftware.wildstacker.utils.entity.EntityStorage;
@@ -152,8 +153,8 @@ public final class WStackedEntity extends WAsyncStackedObject<LivingEntity> impl
         */
         Executor.sync(() -> {
             object.remove();
-            Executor.sync(this::clearFlags, 100L);
-        });
+            Executor.sync(this::clearFlags, object, 100L);
+        }, object);
 
         setFlag(EntityFlag.REMOVED_ENTITY, true);
     }
@@ -167,7 +168,7 @@ public final class WStackedEntity extends WAsyncStackedObject<LivingEntity> impl
             String customName = EntityUtils.getEntityName(this);
             boolean nameVisible = (getStackAmount() > 1 || !isDefaultUpgrade()) && !plugin.getSettings().entitiesHideNames;
 
-            Executor.sync(() -> {
+            FoliaUtils.runEntityTask(plugin, getLivingEntity(), () -> {
                 setCustomName(customName);
                 setCustomNameVisible(nameVisible);
                 plugin.getProviders().notifyNameChangeListeners(object);
@@ -284,12 +285,12 @@ public final class WStackedEntity extends WAsyncStackedObject<LivingEntity> impl
         Executor.sync(() -> {
             if (targetEntity.getLivingEntity().isValid())
                 targetEntity.updateName();
-        }, 2L);
+        }, targetEntity.getLivingEntity(), 2L);
 
         plugin.getSystemManager().updateLinkedEntity(object, targetEntity.getLivingEntity());
 
         if (object.getType().name().equals("PARROT"))
-            Executor.sync(() -> EntityUtils.removeParrotIfShoulder((Parrot) object));
+            Executor.sync(() -> EntityUtils.removeParrotIfShoulder((Parrot) object), object);
 
         this.remove();
 
@@ -324,8 +325,8 @@ public final class WStackedEntity extends WAsyncStackedObject<LivingEntity> impl
                         setFlag(EntityFlag.ORIGINAL_AMOUNT, newStackAmount + eventResult.getValue());
                     plugin.getNMSEntities().setHealthDirectly(object, 0, false);
                     plugin.getNMSEntities().playDeathSound(object);
-                    Executor.sync(this::clearFlags, 100L);
-                }, 2L);
+                    Executor.sync(this::clearFlags, object, 100L);
+                }, object, 2L);
             }
         }
 
@@ -493,12 +494,7 @@ public final class WStackedEntity extends WAsyncStackedObject<LivingEntity> impl
         if (!spawnCorpse)
             return;
 
-        if (!Bukkit.isPrimaryThread()) {
-            Executor.sync(this::spawnCorpse);
-            return;
-        }
-
-        plugin.getSystemManager().spawnCorpse(this);
+        FoliaUtils.runEntityTask(plugin, getLivingEntity(), () -> plugin.getSystemManager().spawnCorpse(this));
     }
 
     /*
@@ -649,21 +645,17 @@ public final class WStackedEntity extends WAsyncStackedObject<LivingEntity> impl
     @Override
     public void runStackAsync(Consumer<Optional<LivingEntity>> result) {
         // Should be called sync due to collecting nearby entities
-        if (!Bukkit.isPrimaryThread()) {
-            Executor.sync(() -> runStackAsync(result));
-            return;
-        }
+        FoliaUtils.runEntityTask(plugin, getLivingEntity(), () -> {
+            int range = getMergeRadius();
+            Location entityLocation = getLivingEntity().getLocation();
 
-        int range = getMergeRadius();
-        Location entityLocation = getLivingEntity().getLocation();
+            if (range <= 0 || getStackLimit() <= 1) {
+                if (result != null)
+                    result.accept(Optional.empty());
+                return;
+            }
 
-        if (range <= 0 || getStackLimit() <= 1) {
-            if (result != null)
-                result.accept(Optional.empty());
-            return;
-        }
-
-        List<StackedEntity> nearbyEntities = EntitiesGetter.getNearbyEntities(entityLocation, range, EntityUtils::isStackable)
+            List<StackedEntity> nearbyEntities = EntitiesGetter.getNearbyEntities(entityLocation, range, EntityUtils::isStackable)
                 .map(WStackedEntity::of).filter(stackedEntity -> runStackCheck(stackedEntity) == StackCheckResult.SUCCESS)
                 .collect(Collectors.toList());
 
@@ -701,6 +693,7 @@ public final class WStackedEntity extends WAsyncStackedObject<LivingEntity> impl
             if (result != null)
                 result.accept(Optional.empty());
         }
+        });
     }
 
     @Override

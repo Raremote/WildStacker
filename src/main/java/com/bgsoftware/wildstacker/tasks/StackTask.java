@@ -3,9 +3,14 @@ package com.bgsoftware.wildstacker.tasks;
 import com.bgsoftware.wildstacker.WildStackerPlugin;
 import com.bgsoftware.wildstacker.api.objects.StackedEntity;
 import com.bgsoftware.wildstacker.objects.WStackedEntity;
+import com.bgsoftware.wildstacker.utils.FoliaUtils;
 import com.bgsoftware.wildstacker.utils.entity.EntityUtils;
+import com.bgsoftware.wildstacker.utils.threads.Executor;
 import org.bukkit.Bukkit;
+import org.bukkit.Chunk;
+import org.bukkit.Location;
 import org.bukkit.World;
+import org.bukkit.entity.Entity;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.scheduler.BukkitTask;
@@ -21,7 +26,7 @@ public final class StackTask extends BukkitRunnable {
 
     private StackTask() {
         if (plugin.getSettings().entitiesStackingEnabled && plugin.getSettings().entitiesStackInterval > 0)
-            task = runTaskTimer(plugin, plugin.getSettings().entitiesStackInterval, plugin.getSettings().entitiesStackInterval);
+            task = Executor.timer(this, plugin.getSettings().entitiesStackInterval);
     }
 
     public static void start() {
@@ -34,26 +39,38 @@ public final class StackTask extends BukkitRunnable {
     @Override
     public void run() {
         if (Bukkit.getOnlinePlayers().size() > 0) {
-            for (World world : Bukkit.getWorlds()) {
-                try {
-                    Set<LivingEntity> livingEntities = ConcurrentHashMap.newKeySet();
-                    livingEntities.addAll(world.getLivingEntities());
-
-                    for (LivingEntity livingEntity : livingEntities) {
-                        try {
-                            if (!EntityUtils.isStackable(livingEntity))
-                                continue;
-
-                            StackedEntity stackedEntity = WStackedEntity.of(livingEntity);
-
-                            if (!stackedEntity.isCached())
-                                continue;
-
-                            stackedEntity.runStackAsync(null);
-                        } catch (Throwable ignored) {
-                        }
+            if (FoliaUtils.isFolia()) {
+                for (World world : Bukkit.getWorlds()) {
+                    for (Chunk chunk : world.getLoadedChunks()) {
+                        Location loc = new Location(world, chunk.getX() << 4, 0, chunk.getZ() << 4);
+                        FoliaUtils.runRegionTask(plugin, loc, () -> {
+                            for (Entity entity : chunk.getEntities()) {
+                                if (!(entity instanceof LivingEntity)) continue;
+                                LivingEntity livingEntity = (LivingEntity) entity;
+                                if (!EntityUtils.isStackable(livingEntity)) continue;
+                                StackedEntity stackedEntity = WStackedEntity.of(livingEntity);
+                                if (!stackedEntity.isCached()) continue;
+                                stackedEntity.runStackAsync(null);
+                            }
+                        });
                     }
-                } catch (Throwable ignored) {
+                }
+            } else {
+                for (World world : Bukkit.getWorlds()) {
+                    try {
+                        Set<LivingEntity> livingEntities = ConcurrentHashMap.newKeySet();
+                        livingEntities.addAll(world.getLivingEntities());
+                        for (LivingEntity livingEntity : livingEntities) {
+                            try {
+                                if (!EntityUtils.isStackable(livingEntity))
+                                    continue;
+                                StackedEntity stackedEntity = WStackedEntity.of(livingEntity);
+                                if (!stackedEntity.isCached())
+                                    continue;
+                                stackedEntity.runStackAsync(null);
+                            } catch (Throwable ignored) {}
+                        }
+                    } catch (Throwable ignored) {}
                 }
             }
         }

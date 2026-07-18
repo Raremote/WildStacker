@@ -2,13 +2,17 @@ package com.bgsoftware.wildstacker.utils.threads;
 
 import com.bgsoftware.wildstacker.WildStackerPlugin;
 import com.bgsoftware.wildstacker.api.objects.AsyncStackedObject;
+import com.bgsoftware.wildstacker.api.objects.StackedEntity;
 import com.bgsoftware.wildstacker.api.objects.StackedItem;
 import com.bgsoftware.wildstacker.api.objects.StackedObject;
 import com.bgsoftware.wildstacker.objects.WAsyncStackedObject;
+import com.bgsoftware.wildstacker.utils.FoliaUtils;
 import com.google.common.collect.Maps;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import org.bukkit.Bukkit;
+import org.bukkit.Location;
 import org.bukkit.World;
+import org.bukkit.entity.Entity;
 
 import java.util.EnumMap;
 import java.util.Map;
@@ -32,7 +36,32 @@ public final class StackService {
             finalRunnable = runnable;
         }
 
+        if (FoliaUtils.hasSchedulerApi()) {
+            if (!scheduleOnFolia(stackedObject, finalRunnable))
+                execute(stackedObject.getWorld(), StackType.fromObject(stackedObject), finalRunnable);
+            return;
+        }
+
         execute(stackedObject.getWorld(), StackType.fromObject(stackedObject), finalRunnable);
+    }
+
+    private static boolean scheduleOnFolia(StackedObject<?> stackedObject, Runnable task) {
+        if (stackedObject instanceof StackedEntity) {
+            FoliaUtils.runEntityTask(WildStackerPlugin.getPlugin(),
+                    ((StackedEntity) stackedObject).getLivingEntity(), task);
+            return true;
+        }
+        if (stackedObject instanceof StackedItem) {
+            FoliaUtils.runEntityTask(WildStackerPlugin.getPlugin(),
+                    ((StackedItem) stackedObject).getItem(), task);
+            return true;
+        }
+        Location loc = stackedObject.getLocation();
+        if (loc != null && loc.getWorld() != null) {
+            FoliaUtils.runRegionTask(WildStackerPlugin.getPlugin(), loc, task);
+            return true;
+        }
+        return false;
     }
 
     private static void execute(World world, StackType stackType, Runnable runnable) {
@@ -45,10 +74,16 @@ public final class StackService {
     }
 
     public static boolean isStackThread() {
+        if (FoliaUtils.hasSchedulerApi())
+            return FoliaUtils.isGlobalOrPrimaryThread();
+
         return STACKING_THREAD_NAME_PATTERN.matcher(Thread.currentThread().getName()).find();
     }
 
     public static boolean canStackFromThread() {
+        if (FoliaUtils.hasSchedulerApi())
+            return FoliaUtils.isGlobalOrPrimaryThread();
+
         return isStackThread() || Bukkit.isPrimaryThread();
     }
 

@@ -171,7 +171,7 @@ public final class DeathSimulation {
 
         Location dropLocation = livingEntity.getLocation().add(0, 0.5, 0);
 
-        Executor.async(() -> {
+        Executor.sync(() -> {
             livingEntity.setFireTicks(fireTicks);
 
             List<ItemStack> drops = stackedEntity.getDrops(lootBonusLevel, plugin.getSettings().multiplyDrops ? unstackAmount : 1);
@@ -276,8 +276,9 @@ public final class DeathSimulation {
 
                 // Restore stacked entity amount
                 stackedEntity.setStackAmount(realStackAmount, false);
-            });
-        });
+                ((WStackedEntity) stackedEntity).updateName();
+            }, livingEntity);
+        }, livingEntity);
 
         return result;
     }
@@ -313,7 +314,7 @@ public final class DeathSimulation {
             }
 
             // We make sure the entity doesn't get any knockback by setting the velocity to 0.
-            Executor.sync(() -> livingEntity.setVelocity(new Vector()), 1L);
+            Executor.sync(() -> livingEntity.setVelocity(new Vector()), livingEntity, 1L);
 
             return true;
         }

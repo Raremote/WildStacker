@@ -129,7 +129,16 @@ public class NMSEntitiesImpl extends com.bgsoftware.wildstacker.nms.v26_1.Abstra
     @Override
     public void setKiller(LivingEntity bukkitLivingEntity, Player killer) {
         net.minecraft.world.entity.LivingEntity livingEntity = ((CraftLivingEntity) bukkitLivingEntity).getHandle();
-        livingEntity.lastHurtByPlayer = killer == null ? null : EntityReference.of(((CraftPlayer) killer).getHandle());
+        try {
+            livingEntity.lastHurtByPlayer = killer == null ? null : EntityReference.of(((CraftPlayer) killer).getHandle());
+        } catch (Throwable ex) {
+            try {
+                java.lang.reflect.Field field = net.minecraft.world.entity.LivingEntity.class.getDeclaredField("lastHurtByPlayer");
+                field.setAccessible(true);
+                field.set(livingEntity, killer == null ? null : ((CraftPlayer) killer).getHandle());
+            } catch (Throwable ignored) {
+            }
+        }
     }
 
     @Override

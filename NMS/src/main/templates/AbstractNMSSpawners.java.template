@@ -57,7 +57,19 @@ public abstract class AbstractNMSSpawners implements NMSSpawners {
         if (!isChunkContainsSpawners(levelChunk))
             return;
 
-        List<TickingBlockEntity> blockEntityTickers = LEVEL_BLOCK_ENTITY_TICKERS.get(serverLevel);
+        List<TickingBlockEntity> blockEntityTickers = getBlockEntityTickers(serverLevel);
+
+        if (blockEntityTickers == null) {
+            for (BlockEntity blockEntity : levelChunk.getBlockEntities().values()) {
+                if (blockEntity instanceof SpawnerBlockEntity) {
+                    BlockPos blockPos = blockEntity.getBlockPos();
+                    StackedSpawner stackedSpawner = WStackedSpawner.of(bukkitWorld.getBlockAt(
+                            blockPos.getX(), blockPos.getY(), blockPos.getZ()));
+                    directSwapStackedBaseSpawner(serverLevel, blockPos, stackedSpawner);
+                }
+            }
+            return;
+        }
 
         List<TickingBlockEntity> watchersToAdd = new LinkedList<>();
         Iterator<TickingBlockEntity> blockEntityIterator = blockEntityTickers.iterator();
@@ -94,7 +106,13 @@ public abstract class AbstractNMSSpawners implements NMSSpawners {
         int blockY = location.getBlockY();
         int blockZ = location.getBlockZ();
 
-        List<TickingBlockEntity> blockEntityTickers = LEVEL_BLOCK_ENTITY_TICKERS.get(serverLevel);
+        List<TickingBlockEntity> blockEntityTickers = getBlockEntityTickers(serverLevel);
+
+        if (blockEntityTickers == null) {
+            BlockPos blockPos = new BlockPos(blockX, blockY, blockZ);
+            directSwapStackedBaseSpawner(serverLevel, blockPos, stackedSpawner);
+            return;
+        }
 
         TickingBlockEntity watcherToAdd = null;
         Iterator<TickingBlockEntity> blockEntityIterator = blockEntityTickers.iterator();
@@ -147,19 +165,23 @@ public abstract class AbstractNMSSpawners implements NMSSpawners {
 
     @Override
     public SpawnerCachedData readData(CreatureSpawner creatureSpawner) {
-        SpawnerBlockEntity spawnerBlockEntity = (SpawnerBlockEntity) ((CraftWorld) creatureSpawner.getWorld())
-                .getHandle().getBlockEntity(((CraftBlockState) creatureSpawner).getPosition());
-        BaseSpawner baseSpawner = spawnerBlockEntity.getSpawner();
-        return new SpawnerCachedData(
-                baseSpawner.minSpawnDelay,
-                baseSpawner.maxSpawnDelay,
-                baseSpawner.spawnCount,
-                baseSpawner.maxNearbyEntities,
-                baseSpawner.requiredPlayerRange,
-                baseSpawner.spawnRange,
-                baseSpawner.spawnDelay / 20,
-                baseSpawner instanceof StackedBaseSpawner stackedBaseSpawner ? stackedBaseSpawner.failureReason : ""
-        );
+        try {
+            SpawnerBlockEntity spawnerBlockEntity = (SpawnerBlockEntity) ((CraftWorld) creatureSpawner.getWorld())
+                    .getHandle().getBlockEntity(((CraftBlockState) creatureSpawner).getPosition());
+            BaseSpawner baseSpawner = spawnerBlockEntity.getSpawner();
+            return new SpawnerCachedData(
+                    baseSpawner.minSpawnDelay,
+                    baseSpawner.maxSpawnDelay,
+                    baseSpawner.spawnCount,
+                    baseSpawner.maxNearbyEntities,
+                    baseSpawner.requiredPlayerRange,
+                    baseSpawner.spawnRange,
+                    baseSpawner.spawnDelay / 20,
+                    baseSpawner instanceof StackedBaseSpawner stackedBaseSpawner ? stackedBaseSpawner.failureReason : ""
+            );
+        } catch (Throwable ex) {
+            return new SpawnerCachedData(0, 0, 0, 0, 0, 0, 0, "");
+        }
     }
 
     protected final void createCondition(String id, BiPredicate<ServerLevel, BlockPos> predicate, EntityType... entityTypes) {
@@ -175,6 +197,19 @@ public abstract class AbstractNMSSpawners implements NMSSpawners {
 
     protected final BlockState getBlockBelow(ServerLevel serverLevel, BlockPos blockPos) {
         return serverLevel.getBlockState(blockPos.below());
+    }
+
+    private static void directSwapStackedBaseSpawner(ServerLevel serverLevel, BlockPos blockPos,
+                                                       StackedSpawner stackedSpawner) {
+        SpawnerBlockEntity spawnerBlockEntity = (SpawnerBlockEntity) serverLevel.getBlockEntity(blockPos);
+        if (spawnerBlockEntity == null)
+            return;
+
+        BaseSpawner current = spawnerBlockEntity.getSpawner();
+        if (current instanceof StackedBaseSpawner)
+            return;
+
+        new StackedBaseSpawner(spawnerBlockEntity, stackedSpawner);
     }
 
     private static boolean isChunkContainsSpawners(LevelChunk levelChunk) {
@@ -193,7 +228,27 @@ public abstract class AbstractNMSSpawners implements NMSSpawners {
         if (!field.isValid())
             field = new ReflectField<>(Level.class, List.class, Modifier.PUBLIC | Modifier.FINAL, 1);
 
+        if (!field.isValid())
+            field = new ReflectField<>(Level.class, List.class, Modifier.PROTECTED | Modifier.FINAL, 2);
+
+        if (!field.isValid())
+            field = new ReflectField<>(Level.class, List.class, Modifier.PROTECTED, 1);
+
         return field;
+    }
+
+    private static List<TickingBlockEntity> getBlockEntityTickers(ServerLevel serverLevel) {
+        List<TickingBlockEntity> tickers = LEVEL_BLOCK_ENTITY_TICKERS.get(serverLevel);
+        if (tickers != null)
+            return tickers;
+
+        try {
+            java.lang.reflect.Field field = Level.class.getDeclaredField("blockEntityTickers");
+            field.setAccessible(true);
+            return (List<TickingBlockEntity>) field.get(serverLevel);
+        } catch (Throwable ex) {
+            return null;
+        }
     }
 
 }

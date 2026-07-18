@@ -7,6 +7,7 @@ import com.bgsoftware.wildstacker.WildStackerPlugin;
 import com.bgsoftware.wildstacker.api.enums.SpawnCause;
 import com.bgsoftware.wildstacker.objects.WStackedEntity;
 import com.bgsoftware.wildstacker.utils.entity.EntityUtils;
+import com.bgsoftware.wildstacker.utils.threads.Executor;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.EntityType;
 import org.bukkit.event.EventHandler;
@@ -62,7 +63,7 @@ public final class CrazyEnchantments2Hook {
             if (allyType == null)
                 return;
 
-            Bukkit.getScheduler().runTaskLater(plugin, () -> {
+            Executor.sync(() -> {
                 if (allyManager.isAllyMob(e.getEntity())) {
                     WStackedEntity.of(e.getEntity()).setSpawnCause(SpawnCause.CRAZY_ENCHANTMENTS);
                 }

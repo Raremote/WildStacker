@@ -35,7 +35,7 @@ public final class BucketsListener implements Listener {
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onBucketUse(PlayerBucketFillEvent e) {
         if (plugin.getSettings().bucketsStackerEnabled && e.getPlayer().getGameMode() != GameMode.CREATIVE) {
-            Bukkit.getScheduler().runTask(plugin, () -> ItemUtils.stackBucket(e.getItemStack(), e.getPlayer().getInventory()));
+            Executor.sync(() -> ItemUtils.stackBucket(e.getItemStack(), e.getPlayer().getInventory()));
         }
     }
 

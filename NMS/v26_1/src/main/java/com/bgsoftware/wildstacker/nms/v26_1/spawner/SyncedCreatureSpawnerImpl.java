@@ -64,7 +64,10 @@ public class SyncedCreatureSpawnerImpl extends CraftBlockEntityState<SpawnerBloc
 
     @Override
     public EntityType getSpawnedType() {
-        SpawnData spawnData = getSpawner().nextSpawnData;
+        BaseSpawner spawner = getSpawner();
+        if (spawner == null)
+            return null;
+        SpawnData spawnData = spawner.nextSpawnData;
         if (spawnData == null)
             return null;
 
@@ -286,7 +289,10 @@ public class SyncedCreatureSpawnerImpl extends CraftBlockEntityState<SpawnerBloc
     }
 
     BaseSpawner getSpawner() {
-        return ((SpawnerBlockEntity) this.serverLevel.getBlockEntity(this.blockPos)).getSpawner();
+        SpawnerBlockEntity blockEntity = (SpawnerBlockEntity) this.serverLevel.getBlockEntity(this.blockPos);
+        if (blockEntity == null)
+            return null;
+        return blockEntity.getSpawner();
     }
 
     private SpawnData.CustomSpawnRules toMinecraftRule(SpawnRule rule) {

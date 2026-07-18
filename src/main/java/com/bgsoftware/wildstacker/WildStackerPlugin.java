@@ -36,6 +36,7 @@ import com.bgsoftware.wildstacker.nms.NMSEntities;
 import com.bgsoftware.wildstacker.nms.NMSHolograms;
 import com.bgsoftware.wildstacker.nms.NMSSpawners;
 import com.bgsoftware.wildstacker.nms.NMSWorld;
+import com.bgsoftware.wildstacker.utils.FoliaUtils;
 import com.bgsoftware.wildstacker.utils.ServerVersion;
 import com.bgsoftware.wildstacker.utils.entity.EntityStorage;
 import com.bgsoftware.wildstacker.utils.entity.logic.DeathSimulation;
@@ -109,11 +110,7 @@ public final class WildStackerPlugin extends JavaPlugin implements WildStacker {
     public void onDisable() {
         log("Cancelling tasks...");
 
-        try {
-            Bukkit.getScheduler().cancelAllTasks();
-        } catch (Throwable ex) {
-            Bukkit.getScheduler().cancelTasks(this);
-        }
+        Executor.cancelTasks();
 
         log("Shutting down stacking service...");
 
@@ -179,7 +176,8 @@ public final class WildStackerPlugin extends JavaPlugin implements WildStacker {
 
         try {
             Class.forName("com.destroystokyo.paper.event.server.ServerTickEndEvent");
-            getServer().getPluginManager().registerEvents(new ServerTickListener(), this);
+            if (!FoliaUtils.isFolia())
+                getServer().getPluginManager().registerEvents(new ServerTickListener(), this);
         } catch (Throwable ignored) {
         }
 

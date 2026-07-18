@@ -7,6 +7,7 @@ import com.bgsoftware.wildstacker.api.enums.StackResult;
 import com.bgsoftware.wildstacker.api.enums.UnstackResult;
 import com.bgsoftware.wildstacker.api.objects.StackedBarrel;
 import com.bgsoftware.wildstacker.api.objects.StackedObject;
+import com.bgsoftware.wildstacker.utils.FoliaUtils;
 import com.bgsoftware.wildstacker.utils.GeneralUtils;
 import com.bgsoftware.wildstacker.utils.ServerVersion;
 import com.bgsoftware.wildstacker.utils.events.EventsCaller;
@@ -102,11 +103,7 @@ public final class WStackedBarrel extends WStackedHologramObject<Block> implemen
 
         this.blockDisplay = null;
 
-        if (ServerVersion.isAtLeast(ServerVersion.v1_17) && !Bukkit.isPrimaryThread()) {
-            Executor.sync(blockDisplay::remove);
-        } else {
-            blockDisplay.remove();
-        }
+        FoliaUtils.runEntityTask(plugin, blockDisplay, blockDisplay::remove);
     }
 
     @Override
@@ -182,47 +179,37 @@ public final class WStackedBarrel extends WStackedHologramObject<Block> implemen
 
     @Override
     public void remove() {
-        if (!Bukkit.isPrimaryThread()) {
-            Executor.sync(this::remove);
-            return;
-        }
+        FoliaUtils.runRegionTask(plugin, getLocation(), () -> {
+            plugin.getSystemManager().removeStackObject(this);
+            plugin.getDataHandler().deleteBarrel(getLocation());
+            removeHologram();
+            removeDisplayBlock();
 
-        plugin.getSystemManager().removeStackObject(this);
-
-        plugin.getDataHandler().deleteBarrel(getLocation());
-
-        removeHologram();
-        removeDisplayBlock();
-
-        List<HumanEntity> viewers = new ArrayList<>();
-        linkedInventories.forEach(i -> viewers.addAll(i.getViewers()));
-
-        viewers.forEach(HumanEntity::closeInventory);
-
-        linkedInventories.clear();
+            List<HumanEntity> viewers = new ArrayList<>();
+            linkedInventories.forEach(i -> viewers.addAll(i.getViewers()));
+            viewers.forEach(HumanEntity::closeInventory);
+            linkedInventories.clear();
+        });
     }
 
     @Override
     public void updateName() {
-        if (!Bukkit.isPrimaryThread()) {
-            Executor.sync(this::updateName);
-            return;
-        }
+        FoliaUtils.runRegionTask(plugin, getLocation(), () -> {
+            String customName = plugin.getSettings().barrelsCustomName;
 
-        String customName = plugin.getSettings().barrelsCustomName;
+            if (customName.isEmpty())
+                return;
 
-        if (customName.isEmpty())
-            return;
+            int amount = getStackAmount();
 
-        int amount = getStackAmount();
+            if (amount < 1) {
+                removeHologram();
+                return;
+            }
 
-        if (amount < 1) {
-            removeHologram();
-            return;
-        }
-
-        customName = plugin.getSettings().barrelsNameBuilder.build(this);
-        setHologramName(customName, true);
+            customName = plugin.getSettings().barrelsNameBuilder.build(this);
+            setHologramName(customName, true);
+        });
     }
 
     @Override

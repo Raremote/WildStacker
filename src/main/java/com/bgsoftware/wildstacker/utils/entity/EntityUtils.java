@@ -7,6 +7,7 @@ import com.bgsoftware.wildstacker.api.enums.SpawnCause;
 import com.bgsoftware.wildstacker.api.enums.StackCheckResult;
 import com.bgsoftware.wildstacker.api.objects.StackedEntity;
 import com.bgsoftware.wildstacker.nms.entity.INMSEntityEquipment;
+import com.bgsoftware.wildstacker.utils.FoliaUtils;
 import com.bgsoftware.wildstacker.utils.ServerVersion;
 import com.bgsoftware.wildstacker.utils.legacy.EntityTypes;
 import com.bgsoftware.wildstacker.utils.threads.Executor;
@@ -547,13 +548,9 @@ public final class EntityUtils {
     }
 
     public static void clearEquipment(LivingEntity livingEntity) {
-        if (!Bukkit.isPrimaryThread()) {
-            Executor.sync(() -> clearEquipment(livingEntity));
-            return;
-        }
-
-        boolean clearEquipment = plugin.getSettings().entitiesClearEquipment;
-        EntityEquipment bukkitEntityEquipment = livingEntity.getEquipment();
+        FoliaUtils.runEntityTask(plugin, livingEntity, () -> {
+            boolean clearEquipment = plugin.getSettings().entitiesClearEquipment;
+            EntityEquipment bukkitEntityEquipment = livingEntity.getEquipment();
         INMSEntityEquipment entityEquipment = plugin.getNMSAdapter().createEntityEquipmentWrapper(bukkitEntityEquipment);
 
         if (clearEquipment || entityEquipment.getItemInMainHandDropChance() >= 2.0F)
@@ -613,6 +610,8 @@ public final class EntityUtils {
                 break;
             }
         }
+
+        });
 
     }
 

@@ -29,13 +29,13 @@ public class Chunk2ObjectMap<V> extends AbstractMap<ChunkPosition, V> {
     private int size = 0;
 
     @Override
-    public int size() {
+    public synchronized int size() {
         return this.size;
     }
 
     @Override
     public boolean isEmpty() {
-        return this.size == 0;
+        return size() == 0;
     }
 
     @Override
@@ -67,7 +67,7 @@ public class Chunk2ObjectMap<V> extends AbstractMap<ChunkPosition, V> {
         return worldBackendData.get(chunkPair);
     }
 
-    public V computeIfAbsent(String worldName, long chunkPair, Supplier<V> newValue) {
+    public synchronized V computeIfAbsent(String worldName, long chunkPair, Supplier<V> newValue) {
         Map<Long, V> worldBackendData = this.backendMap.computeIfAbsent(worldName, n -> new LinkedHashMap<>());
         return worldBackendData.computeIfAbsent(chunkPair, p -> {
             ++Chunk2ObjectMap.this.size;
@@ -82,7 +82,7 @@ public class Chunk2ObjectMap<V> extends AbstractMap<ChunkPosition, V> {
     }
 
     @Nullable
-    public V put(String worldName, long chunkPair, V value) {
+    public synchronized V put(String worldName, long chunkPair, V value) {
         Map<Long, V> worldBackendData = this.backendMap.computeIfAbsent(worldName, n -> new LinkedHashMap<>());
 
         V oldValue = worldBackendData.put(chunkPair, value);
@@ -104,7 +104,7 @@ public class Chunk2ObjectMap<V> extends AbstractMap<ChunkPosition, V> {
     }
 
     @Nullable
-    public V remove(String worldName, long chunkPair) {
+    public synchronized V remove(String worldName, long chunkPair) {
         Map<Long, V> worldBackendData = this.backendMap.get(worldName);
         if (worldBackendData == null)
             return null;
@@ -127,7 +127,7 @@ public class Chunk2ObjectMap<V> extends AbstractMap<ChunkPosition, V> {
     }
 
     @Override
-    public void clear() {
+    public synchronized void clear() {
         this.backendMap.clear();
         this.size = 0;
     }
