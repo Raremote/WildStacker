@@ -3,6 +3,7 @@ package com.bgsoftware.wildstacker.hooks;
 import com.bgsoftware.wildstacker.Locale;
 import com.bgsoftware.wildstacker.WildStackerPlugin;
 import com.bgsoftware.wildstacker.api.handlers.SystemManager;
+import com.bgsoftware.wildstacker.utils.FoliaUtils;
 import com.bgsoftware.wildstacker.utils.ServerVersion;
 import com.bgsoftware.wildstacker.utils.entity.EntitiesGetter;
 import com.bgsoftware.wildstacker.utils.entity.EntityUtils;
@@ -171,6 +172,8 @@ public final class ProtocolLibHook {
         }
 
         private void onPacketSendingInternal(PacketEvent event) {
+            if (FoliaUtils.isFolia() && !FoliaUtils.isGlobalOrPrimaryThread())
+                return;
             PacketContainer packetContainer = event.getPacket();
             StructureModifier<Entity> entityModifier = packetContainer.getEntityModifier(event);
 

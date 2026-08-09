@@ -7,7 +7,7 @@ java {
 }
 
 dependencies {
-    compileOnly "net.prosavage.factionsx:FactionsX:1.3-STABLE-lib"
+    compileOnly "net.prosavage.factionsx:FactionsX-API:1.3-STABLE"
     compileOnly "org.spigotmc:v1_8_R3-Taco:latest"
     compileOnly project(":API")
     compileOnly rootProject
